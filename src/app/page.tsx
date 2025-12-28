@@ -2,7 +2,6 @@
 
 import { Search } from "lucide-react";
 import { useEffect, useState } from "react";
-import { productSercvice } from "../services/product-service";
 import { Product } from "../types/product";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +10,7 @@ import { FamilyProduct } from "../types/familyProducts";
 import { familyProductService } from "../services/familyProduct-service";
 import { FamilyProductsSlider } from "../components/FamilyProductsSlider";
 import { AddProductDialog } from "../components/AddProductDialog";
+import { productService } from "../services/product-service";
 
 export default function Home() {
     const [products, setProducts] = useState<Product[]>([])
@@ -18,8 +18,9 @@ export default function Home() {
 
     useEffect(() => {
       const handleFetchDataProducts = async () => {
-        const dataProducts = await productSercvice.getProducts()
+        const dataProducts = await productService.getProducts()
         setProducts(dataProducts)
+        console.log(products)
       }
       handleFetchDataProducts()
 
