@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
-import { Plus } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import React, { useState, useMemo, useEffect } from "react";
+import { Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -9,13 +9,25 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Check } from 'lucide-react';
-import { FamilyProduct } from '../types/familyProducts';
-import { Label } from '@/components/ui/label';
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Check } from "lucide-react";
+import { FamilyProduct } from "../types/familyProducts";
+import { Label } from "@/components/ui/label";
+import { productService } from "../services/product-service";
 
 interface AddProductDialogProps {
   families: FamilyProduct[];
@@ -24,33 +36,52 @@ interface AddProductDialogProps {
 export const AddProductDialog = ({ families }: AddProductDialogProps) => {
   const [open, setOpen] = useState(false);
   const [familyOpen, setFamilyOpen] = useState(false);
-  const [selectedFamily, setSelectedFamily] = useState<FamilyProduct | null>(null);
-  const [searchFamily, setSearchFamily] = useState('');
-  const [productName, setProductName] = useState('');
-  const [price, setPrice] = useState('');
-
+  const [selectedFamily, setSelectedFamily] = useState<FamilyProduct | null>(
+    null
+  );
+  const [searchFamily, setSearchFamily] = useState("");
+  const [productName, setProductName] = useState("");
+  const [price, setPrice] = useState("");
+  const [codeProduct, setCodeProduct] = useState<string>("");
+  const [loadingCode, setLoadingCode] = useState(true);
   const filteredFamilies = useMemo(() => {
     if (!searchFamily) return families;
-    return families.filter(family =>
+    return families.filter((family) =>
       family.nombreFamilia.toLowerCase().includes(searchFamily.toLowerCase())
     );
   }, [families, searchFamily]);
 
   const handleSubmit = () => {
-    console.log('Producto a agregar:', {
+    console.log("Producto a agregar:", {
       nombre: productName,
       familia: selectedFamily,
-      precio: parseFloat(price)
+      precio: parseFloat(price),
     });
     // Aquí irá la lógica de POST cuando esté lista
-    
+
     // Reset form
-    setProductName('');
-    setPrice('');
+    setProductName("");
+    setPrice("");
     setSelectedFamily(null);
-    setSearchFamily('');
+    setSearchFamily("");
     setOpen(false);
   };
+
+  useEffect(() => {
+  if (open) {
+    const handleFetchDataProducts = async () => {
+      setLoadingCode(true);
+      try {
+        const dataCodeProduct = await productService.getCodeProduct();
+        setCodeProduct(dataCodeProduct.codigo);
+      } finally {
+        setLoadingCode(false);
+      }
+    };
+
+    handleFetchDataProducts();
+  }
+}, [open]);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -68,15 +99,25 @@ export const AddProductDialog = ({ families }: AddProductDialogProps) => {
         </DialogHeader>
         <div className="grid gap-4 py-4">
           <div className="grid gap-2">
+            <Label htmlFor="name">Codigo</Label>
+            <Input
+              id="codeProduct"
+              placeholder={loadingCode ? 'Cargando...' : 'Código generado'}
+              value={codeProduct}
+              readOnly
+            />
+          </div>
+
+          <div className="grid gap-2">
             <Label htmlFor="name">Nombre del Producto</Label>
             <Input
               id="name"
-              placeholder="Ej: Laptop HP 15"
+              placeholder="ej: Pollo a la brasa"
               value={productName}
               onChange={(e) => setProductName(e.target.value)}
             />
           </div>
-          
+
           <div className="grid gap-2">
             <Label>Familia de Producto</Label>
             <Popover open={familyOpen} onOpenChange={setFamilyOpen}>
@@ -87,13 +128,15 @@ export const AddProductDialog = ({ families }: AddProductDialogProps) => {
                   aria-expanded={familyOpen}
                   className="justify-between"
                 >
-                  {selectedFamily ? selectedFamily.nombreFamilia : "Seleccionar familia..."}
+                  {selectedFamily
+                    ? selectedFamily.nombreFamilia
+                    : "Seleccionar familia..."}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-[400px] p-0">
                 <Command>
-                  <CommandInput 
-                    placeholder="Buscar familia..." 
+                  <CommandInput
+                    placeholder="Buscar familia..."
                     value={searchFamily}
                     onValueChange={setSearchFamily}
                   />
@@ -107,12 +150,13 @@ export const AddProductDialog = ({ families }: AddProductDialogProps) => {
                           onSelect={() => {
                             setSelectedFamily(family);
                             setFamilyOpen(false);
-                            setSearchFamily('');
+                            setSearchFamily("");
                           }}
                         >
                           <Check
                             className={`mr-2 h-4 w-4 ${
-                              selectedFamily?.idFamiliaProducto === family.idFamiliaProducto
+                              selectedFamily?.idFamiliaProducto ===
+                              family.idFamiliaProducto
                                 ? "opacity-100"
                                 : "opacity-0"
                             }`}
@@ -140,7 +184,11 @@ export const AddProductDialog = ({ families }: AddProductDialogProps) => {
           </div>
         </div>
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setOpen(false)}
+          >
             Cancelar
           </Button>
           <Button type="button" onClick={handleSubmit}>
