@@ -1,9 +1,10 @@
-export const productSercvice = {
-    getProducts: async () => {
-        // const response = await fetch('http://localhost:3000/api/products');
-        // return response.json();
+import { CodeProduct } from "../types/codeProduct";
 
-        const { exampleDataProducts } = await import('../data/dataproducts');
-        return exampleDataProducts;
-    }
+export const productService = {
+    getProducts: async () => {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/catalog/products`);
+        return response.json();
+    },
+
+    
 };
