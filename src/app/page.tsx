@@ -2,7 +2,7 @@
 
 import { Search, Grid3x3, LayoutGrid, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Product } from "../types/product";
+import { PaginationMeta, Product } from "../types/product";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ProductCard } from "../components/ProductCard";
@@ -19,9 +19,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
+import { Pagination } from "../components/Pagination";
 
 export default function Home() {
     const [products, setProducts] = useState<Product[]>([])
+    const [paginationMeta, setPaginationMeta] = useState<PaginationMeta | null>(null)
     const [familyProducts, setFamilyProducts] = useState<FamilyProduct[]>([])
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
     const [updateDialogOpen, setUpdateDialogOpen] = useState(false)
@@ -29,35 +31,62 @@ export default function Home() {
     const [selectedFamilyId, setSelectedFamilyId] = useState<number | null>(null)
     const [isLoadingProducts, setIsLoadingProducts] = useState(false)
     const [searchQuery, setSearchQuery] = useState("")
+    const [currentPage, setCurrentPage] = useState(1)
+    const [itemsPerPage] = useState(12) // Puedes hacer esto configurable también
 
-    const fetchProducts = async () => {
+    const handleProductCreated = () => {
+  // Refetch manteniendo el estado actual (página, filtros, etc.)
+  if (selectedFamilyId) {
+    fetchProductsByFamily(selectedFamilyId, currentPage)
+  } else if (searchQuery.trim()) {
+    searchProducts(searchQuery, currentPage)
+  } else {
+    fetchProducts(currentPage)
+  }
+}
+    const fetchProducts = async (page: number = 1) => {
       setIsLoadingProducts(true)
       try {
-        const dataProducts = await productService.getProducts()
-        setProducts(dataProducts)
+        const response = await productService.getProducts(page, itemsPerPage)
+        setProducts(Array.isArray(response.data) ? response.data : [])
+        setPaginationMeta(response.meta)
+        setCurrentPage(page)
+      } catch (error) {
+        console.error('Error fetching products:', error)
+        setProducts([])
+        setPaginationMeta(null)
       } finally {
         setIsLoadingProducts(false)
       }
     }
 
-    const fetchProductsByFamily = async (idFamily: number) => {
+    const fetchProductsByFamily = async (idFamily: number, page: number = 1) => {
       setIsLoadingProducts(true)
       try {
-        const dataProducts = await productService.getProductsByIdFamily(idFamily)
-        setProducts(dataProducts)
+        const response = await productService.getProductsByIdFamily(idFamily, page, itemsPerPage)
+        setProducts(Array.isArray(response.data) ? response.data : [])
+        setPaginationMeta(response.meta)
+        setCurrentPage(page)
+      } catch (error) {
+        console.error('Error fetching products by family:', error)
+        setProducts([])
+        setPaginationMeta(null)
       } finally {
         setIsLoadingProducts(false)
       }
     }
 
-    const searchProducts = async (query: string) => {
+    const searchProducts = async (query: string, page: number = 1) => {
       setIsLoadingProducts(true)
       try {
-        const dataProducts = await productService.getProducts()
-        const filtered = dataProducts.filter(product => 
-          product.nombre.toLowerCase().includes(query.toLowerCase())
-        )
-        setProducts(filtered)
+        const response = await productService.searchProducts(query, page, itemsPerPage)
+        setProducts(Array.isArray(response.data) ? response.data : [])
+        setPaginationMeta(response.meta)
+        setCurrentPage(page)
+      } catch (error) {
+        console.error('Error searching products:', error)
+        setProducts([])
+        setPaginationMeta(null)
       } finally {
         setIsLoadingProducts(false)
       }
@@ -74,31 +103,42 @@ export default function Home() {
     }, [])
 
     const handleFamilyClick = (family: FamilyProduct) => {
-      // Si ya está seleccionada, deseleccionar
       if (selectedFamilyId === family.idFamiliaProducto) {
         setSelectedFamilyId(null)
         setSearchQuery("")
-        fetchProducts()
+        fetchProducts(1)
       } else {
         setSelectedFamilyId(family.idFamiliaProducto)
         setSearchQuery("")
-        fetchProductsByFamily(family.idFamiliaProducto)
+        fetchProductsByFamily(family.idFamiliaProducto, 1)
       }
     }
 
     const handleSearch = () => {
       if (searchQuery.trim()) {
         setSelectedFamilyId(null)
-        searchProducts(searchQuery)
+        searchProducts(searchQuery, 1)
       } else {
-        fetchProducts()
+        fetchProducts(1)
       }
     }
 
     const handleClearFilters = () => {
       setSelectedFamilyId(null)
       setSearchQuery("")
-      fetchProducts()
+      fetchProducts(1)
+    }
+
+    const handlePageChange = (page: number) => {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      
+      if (selectedFamilyId) {
+        fetchProductsByFamily(selectedFamilyId, page)
+      } else if (searchQuery.trim()) {
+        searchProducts(searchQuery, page)
+      } else {
+        fetchProducts(page)
+      }
     }
 
     const handleProductImageClick = (product: Product) => {
@@ -107,13 +147,13 @@ export default function Home() {
     }
 
     const handleProductUpdate = () => {
-      // Mantener el filtro actual después de actualizar
+      // Mantener la página actual después de actualizar
       if (selectedFamilyId) {
-        fetchProductsByFamily(selectedFamilyId)
+        fetchProductsByFamily(selectedFamilyId, currentPage)
       } else if (searchQuery.trim()) {
-        searchProducts(searchQuery)
+        searchProducts(searchQuery, currentPage)
       } else {
-        fetchProducts()
+        fetchProducts(currentPage)
       }
     }
 
@@ -171,11 +211,14 @@ export default function Home() {
           <Search className="w-4 h-4 mr-2" />
           <span className="hidden sm:inline">Buscar</span>
         </Button>
-        <AddProductDialog families={familyProducts} />
+        <AddProductDialog 
+        families={familyProducts} 
+        onProductCreated={handleProductCreated}
+      />
       </div>
 
       {hasActiveFilters && (
-        <div className="mb-4 flex items-center gap-2">
+        <div className="mb-4 flex items-center gap-2 flex-wrap">
           <span className="text-sm text-muted-foreground">Filtros activos:</span>
           {selectedFamilyId && (
             <Badge variant="secondary" className="gap-1">
@@ -184,19 +227,19 @@ export default function Home() {
                 className="w-3 h-3 cursor-pointer hover:text-destructive" 
                 onClick={() => {
                   setSelectedFamilyId(null)
-                  fetchProducts()
+                  fetchProducts(1)
                 }}
               />
             </Badge>
           )}
           {searchQuery && (
             <Badge variant="secondary" className="gap-1">
-              Búsqueda: &quot;{searchQuery}&quot;
+              Búsqueda: {searchQuery}
               <X 
                 className="w-3 h-3 cursor-pointer hover:text-destructive" 
                 onClick={() => {
                   setSearchQuery("")
-                  fetchProducts()
+                  fetchProducts(1)
                 }}
               />
             </Badge>
@@ -224,7 +267,7 @@ export default function Home() {
         <div className="flex items-center justify-center py-12">
           <div className="text-muted-foreground">Cargando productos...</div>
         </div>
-      ) : products.length === 0 ? (
+      ) : !Array.isArray(products) || products.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 gap-3">
           <div className="text-muted-foreground">No se encontraron productos</div>
           {hasActiveFilters && (
@@ -234,15 +277,24 @@ export default function Home() {
           )}
         </div>
       ) : (
-        <div className={`grid ${getGridClass()} gap-4`}>
-          {products.map((product) => (
-            <ProductCard 
-              key={product.idProducto} 
-              product={product} 
-              onImageClick={handleProductImageClick}
+        <>
+          <div className={`grid ${getGridClass()} gap-4`}>
+            {products.map((product) => (
+              <ProductCard 
+                key={product.idProducto} 
+                product={product} 
+                onImageClick={handleProductImageClick}
+              />
+            ))}
+          </div>
+
+          {paginationMeta && (
+            <Pagination 
+              meta={paginationMeta}
+              onPageChange={handlePageChange}
             />
-          ))}
-        </div>
+          )}
+        </>
       )}
 
       {selectedProduct && (
