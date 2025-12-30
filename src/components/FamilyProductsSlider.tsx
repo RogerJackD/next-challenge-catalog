@@ -7,9 +7,10 @@ import { Badge } from '@/components/ui/badge';
 interface FamilyProductsSliderProps {
   families: FamilyProduct[];
   onFamilyClick?: (family: FamilyProduct) => void;
+  selectedFamilyId?: number | null;
 }
 
-export const FamilyProductsSlider = ({ families, onFamilyClick }: FamilyProductsSliderProps) => {
+export const FamilyProductsSlider = ({ families, onFamilyClick, selectedFamilyId  }: FamilyProductsSliderProps) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [selectedFamily, setSelectedFamily] = useState<number | null>(null);
   const [showLeftArrow, setShowLeftArrow] = useState(false);
@@ -63,20 +64,20 @@ export const FamilyProductsSlider = ({ families, onFamilyClick }: FamilyProducts
       >
         {families.map((family) => (
           <Badge
-            key={family.idFamiliaProducto}
-            variant={selectedFamily === family.idFamiliaProducto ? "default" : "outline"}
-            className={`
-              cursor-pointer whitespace-nowrap px-6 py-2.5 text-sm font-medium
-              transition-all duration-200 hover:scale-105
-              ${selectedFamily === family.idFamiliaProducto 
-                ? 'shadow-md' 
-                : 'hover:bg-accent'
-              }
-            `}
-            onClick={() => handleFamilyClick(family)}
-          >
-            {family.nombreFamilia}
-          </Badge>
+    key={family.idFamiliaProducto}
+    variant={selectedFamilyId === family.idFamiliaProducto ? "default" : "outline"}
+    className={`
+      cursor-pointer whitespace-nowrap px-6 py-2.5 text-sm font-medium
+      transition-all duration-200 hover:scale-105
+      ${selectedFamilyId === family.idFamiliaProducto 
+        ? 'shadow-md' 
+        : 'hover:bg-accent'
+      }
+    `}
+    onClick={() => handleFamilyClick(family)}
+  >
+    {family.nombreFamilia}
+  </Badge>
         ))}
       </div>
 
