@@ -1,5 +1,5 @@
-import React, { useState, useMemo, useEffect } from "react";
-import { Plus } from "lucide-react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
+import { Plus, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -28,24 +28,28 @@ import { Check } from "lucide-react";
 import { FamilyProduct } from "../types/familyProducts";
 import { Label } from "@/components/ui/label";
 import { productService } from "../services/product-service";
-import { CreateProductDto } from "../types/product"; // Asegúrate de importar el tipo
+import { CreateProductDto } from "../types/product";
 
 interface AddProductDialogProps {
   families: FamilyProduct[];
+  onProductCreated?: () => void;
 }
 
-export const AddProductDialog = ({ families }: AddProductDialogProps) => {
+export const AddProductDialog = ({ families, onProductCreated }: AddProductDialogProps) => {
   const [open, setOpen] = useState(false);
   const [familyOpen, setFamilyOpen] = useState(false);
-  const [selectedFamily, setSelectedFamily] = useState<FamilyProduct | null>(
-    null
-  );
+  const [selectedFamily, setSelectedFamily] = useState<FamilyProduct | null>(null);
   const [searchFamily, setSearchFamily] = useState("");
   const [productName, setProductName] = useState("");
   const [price, setPrice] = useState("");
   const [codeProduct, setCodeProduct] = useState<string>("");
   const [loadingCode, setLoadingCode] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Estados para la imagen
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const filteredFamilies = useMemo(() => {
     if (!searchFamily) return families;
@@ -54,10 +58,46 @@ export const AddProductDialog = ({ families }: AddProductDialogProps) => {
     );
   }, [families, searchFamily]);
 
+  // Manejar selección de imagen
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validar tipo de archivo
+      if (!file.type.startsWith('image/')) {
+        alert('Por favor selecciona un archivo de imagen válido');
+        return;
+      }
+
+      // Validar tamaño (máximo 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('La imagen es muy grande. Máximo 5MB');
+        return;
+      }
+
+      setSelectedImage(file);
+      
+      // Crear preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Limpiar imagen
+  const handleRemoveImage = () => {
+    setSelectedImage(null);
+    setImagePreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   const handleSubmit = async () => {
     // Validación
     if (!productName || !selectedFamily || !price || !codeProduct) {
-      console.error("Todos los campos son requeridos");
+      alert("Todos los campos son requeridos");
       return;
     }
 
@@ -67,12 +107,13 @@ export const AddProductDialog = ({ families }: AddProductDialogProps) => {
       const createProductData: CreateProductDto = {
         codigoMercaderia: codeProduct,
         nombre: productName,
-        familiaProducto: selectedFamily.idFamiliaProducto, // Aquí usamos el ID
+        FamiliaProducto: selectedFamily.idFamiliaProducto,
         precio: parseFloat(price),
+        image: selectedImage || undefined, // Agregar la imagen si existe
       };
 
-      const result = await productService.createProduct(createProductData);
-      console.log("Producto creado exitosamente:", result);
+      await productService.createProduct(createProductData);
+      console.log("Producto creado exitosamente");
 
       // Reset form
       setProductName("");
@@ -80,9 +121,15 @@ export const AddProductDialog = ({ families }: AddProductDialogProps) => {
       setSelectedFamily(null);
       setSearchFamily("");
       setCodeProduct("");
+      handleRemoveImage();
       setOpen(false);
+
+      // Llamar al callback para re-fetch
+      onProductCreated?.();
+      
     } catch (error) {
       console.error("Error al crear el producto:", error);
+      alert("Error al crear el producto. Por favor intenta de nuevo.");
     } finally {
       setIsSubmitting(false);
     }
@@ -206,6 +253,58 @@ export const AddProductDialog = ({ families }: AddProductDialogProps) => {
               onChange={(e) => setPrice(e.target.value)}
               disabled={isSubmitting}
             />
+          </div>
+
+          {/* Sección de imagen */}
+          <div className="grid gap-2">
+            <Label>Imagen del Producto (Opcional)</Label>
+            
+            {imagePreview ? (
+              <div className="relative">
+                <div className="relative w-full h-48 rounded-lg overflow-hidden bg-gray-100">
+                  <img
+                    src={imagePreview}
+                    alt="Preview"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="icon"
+                  className="absolute top-2 right-2"
+                  onClick={handleRemoveImage}
+                  disabled={isSubmitting}
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Input
+                  ref={fileInputRef}
+                  id="image"
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleImageChange}
+                  disabled={isSubmitting}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isSubmitting}
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  Seleccionar Imagen
+                </Button>
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Formatos: JPG, PNG, WebP, GIF (Máx. 5MB)
+            </p>
           </div>
         </div>
         <DialogFooter>
