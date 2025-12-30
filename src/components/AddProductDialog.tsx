@@ -28,6 +28,7 @@ import { Check } from "lucide-react";
 import { FamilyProduct } from "../types/familyProducts";
 import { Label } from "@/components/ui/label";
 import { productService } from "../services/product-service";
+import { CreateProductDto } from "../types/product"; // Asegúrate de importar el tipo
 
 interface AddProductDialogProps {
   families: FamilyProduct[];
@@ -44,6 +45,8 @@ export const AddProductDialog = ({ families }: AddProductDialogProps) => {
   const [price, setPrice] = useState("");
   const [codeProduct, setCodeProduct] = useState<string>("");
   const [loadingCode, setLoadingCode] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const filteredFamilies = useMemo(() => {
     if (!searchFamily) return families;
     return families.filter((family) =>
@@ -51,37 +54,55 @@ export const AddProductDialog = ({ families }: AddProductDialogProps) => {
     );
   }, [families, searchFamily]);
 
-  const handleSubmit = () => {
-    console.log("Producto a agregar:", {
-      nombre: productName,
-      familia: selectedFamily,
-      precio: parseFloat(price),
-    });
-    // Aquí irá la lógica de POST cuando esté lista
+  const handleSubmit = async () => {
+    // Validación
+    if (!productName || !selectedFamily || !price || !codeProduct) {
+      console.error("Todos los campos son requeridos");
+      return;
+    }
 
-    // Reset form
-    setProductName("");
-    setPrice("");
-    setSelectedFamily(null);
-    setSearchFamily("");
-    setOpen(false);
+    setIsSubmitting(true);
+
+    try {
+      const createProductData: CreateProductDto = {
+        codigoMercaderia: codeProduct,
+        nombre: productName,
+        familiaProducto: selectedFamily.idFamiliaProducto, // Aquí usamos el ID
+        precio: parseFloat(price),
+      };
+
+      const result = await productService.createProduct(createProductData);
+      console.log("Producto creado exitosamente:", result);
+
+      // Reset form
+      setProductName("");
+      setPrice("");
+      setSelectedFamily(null);
+      setSearchFamily("");
+      setCodeProduct("");
+      setOpen(false);
+    } catch (error) {
+      console.error("Error al crear el producto:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   useEffect(() => {
-  if (open) {
-    const handleFetchDataProducts = async () => {
-      setLoadingCode(true);
-      try {
-        const dataCodeProduct = await productService.getCodeProduct();
-        setCodeProduct(dataCodeProduct.codigo);
-      } finally {
-        setLoadingCode(false);
-      }
-    };
+    if (open) {
+      const handleFetchDataProducts = async () => {
+        setLoadingCode(true);
+        try {
+          const dataCodeProduct = await productService.getCodeProduct();
+          setCodeProduct(dataCodeProduct.codigo);
+        } finally {
+          setLoadingCode(false);
+        }
+      };
 
-    handleFetchDataProducts();
-  }
-}, [open]);
+      handleFetchDataProducts();
+    }
+  }, [open]);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -99,11 +120,12 @@ export const AddProductDialog = ({ families }: AddProductDialogProps) => {
         </DialogHeader>
         <div className="grid gap-4 py-4">
           <div className="grid gap-2">
-            <Label htmlFor="name">Codigo</Label>
+            <Label htmlFor="codeProduct">Código</Label>
             <Input
               id="codeProduct"
-              placeholder={loadingCode ? 'Cargando...' : 'Código generado'}
+              placeholder={loadingCode ? "Cargando..." : "Código generado"}
               value={codeProduct}
+              disabled={loadingCode}
               readOnly
             />
           </div>
@@ -115,6 +137,7 @@ export const AddProductDialog = ({ families }: AddProductDialogProps) => {
               placeholder="ej: Pollo a la brasa"
               value={productName}
               onChange={(e) => setProductName(e.target.value)}
+              disabled={isSubmitting}
             />
           </div>
 
@@ -127,6 +150,7 @@ export const AddProductDialog = ({ families }: AddProductDialogProps) => {
                   role="combobox"
                   aria-expanded={familyOpen}
                   className="justify-between"
+                  disabled={isSubmitting}
                 >
                   {selectedFamily
                     ? selectedFamily.nombreFamilia
@@ -180,6 +204,7 @@ export const AddProductDialog = ({ families }: AddProductDialogProps) => {
               placeholder="0.00"
               value={price}
               onChange={(e) => setPrice(e.target.value)}
+              disabled={isSubmitting}
             />
           </div>
         </div>
@@ -188,11 +213,16 @@ export const AddProductDialog = ({ families }: AddProductDialogProps) => {
             type="button"
             variant="outline"
             onClick={() => setOpen(false)}
+            disabled={isSubmitting}
           >
             Cancelar
           </Button>
-          <Button type="button" onClick={handleSubmit}>
-            Agregar Producto
+          <Button 
+            type="button" 
+            onClick={handleSubmit}
+            disabled={isSubmitting || !productName || !selectedFamily || !price}
+          >
+            {isSubmitting ? "Agregando..." : "Agregar Producto"}
           </Button>
         </DialogFooter>
       </DialogContent>
