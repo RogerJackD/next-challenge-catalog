@@ -77,20 +77,26 @@ export default function Home() {
     }
 
     const searchProducts = async (query: string, page: number = 1) => {
-      setIsLoadingProducts(true)
-      try {
-        const response = await productService.searchProducts(query, page, itemsPerPage)
-        setProducts(Array.isArray(response.data) ? response.data : [])
-        setPaginationMeta(response.meta)
-        setCurrentPage(page)
-      } catch (error) {
-        console.error('Error searching products:', error)
-        setProducts([])
-        setPaginationMeta(null)
-      } finally {
-        setIsLoadingProducts(false)
-      }
-    }
+  setIsLoadingProducts(true)
+  try {
+    // Pasar selectedFamilyId si existe
+    const response = await productService.searchProducts(
+      query, 
+      page, 
+      itemsPerPage,
+      selectedFamilyId || undefined
+    )
+    setProducts(Array.isArray(response.data) ? response.data : [])
+    setPaginationMeta(response.meta)
+    setCurrentPage(page)
+  } catch (error) {
+    console.error('Error searching products:', error)
+    setProducts([])
+    setPaginationMeta(null)
+  } finally {
+    setIsLoadingProducts(false)
+  }
+}
 
     useEffect(() => {
       fetchProducts()
@@ -103,25 +109,41 @@ export default function Home() {
     }, [])
 
     const handleFamilyClick = (family: FamilyProduct) => {
-      if (selectedFamilyId === family.idFamiliaProducto) {
-        setSelectedFamilyId(null)
-        setSearchQuery("")
-        fetchProducts(1)
-      } else {
-        setSelectedFamilyId(family.idFamiliaProducto)
-        setSearchQuery("")
-        fetchProductsByFamily(family.idFamiliaProducto, 1)
-      }
+  if (selectedFamilyId === family.idFamiliaProducto) {
+    // Deseleccionar familia
+    setSelectedFamilyId(null)
+    // Si hay búsqueda activa, buscar sin filtro de familia
+    if (searchQuery.trim()) {
+      searchProducts(searchQuery, 1)
+    } else {
+      fetchProducts(1)
     }
+  } else {
+    // Seleccionar nueva familia
+    setSelectedFamilyId(family.idFamiliaProducto)
+    // Si hay búsqueda activa, buscar con el nuevo filtro de familia
+    if (searchQuery.trim()) {
+      searchProducts(searchQuery, 1)
+    } else {
+      fetchProductsByFamily(family.idFamiliaProducto, 1)
+    }
+  }
+}
 
     const handleSearch = () => {
-      if (searchQuery.trim()) {
-        setSelectedFamilyId(null)
-        searchProducts(searchQuery, 1)
-      } else {
-        fetchProducts(1)
-      }
+  if (searchQuery.trim()) {
+    // Ya no limpiamos selectedFamilyId, así se puede buscar dentro de una familia
+    searchProducts(searchQuery, 1)
+  } else {
+    // Si no hay búsqueda pero hay familia, mostrar productos de esa familia
+    if (selectedFamilyId) {
+      fetchProductsByFamily(selectedFamilyId, 1)
+    } else {
+      fetchProducts(1)
     }
+  }
+}
+
 
     const handleClearFilters = () => {
       setSelectedFamilyId(null)
