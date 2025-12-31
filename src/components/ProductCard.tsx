@@ -15,7 +15,7 @@ export const ProductCard = ({ product, onImageClick }: ProductCardProps) => {
     : null;
 
   return (
-    <Card className="overflow-hidden group hover:shadow-lg transition-all duration-300">
+    <Card className="overflow-hidden group hover:shadow-lg transition-all duration-300 flex flex-col h-full">
       <div 
         className="relative w-full aspect-square bg-gradient-to-br from-gray-100 to-gray-200 cursor-pointer hover:opacity-80 transition-opacity overflow-hidden"
         onClick={() => onImageClick(product)}
@@ -50,12 +50,18 @@ export const ProductCard = ({ product, onImageClick }: ProductCardProps) => {
         )}
       </div>
       
-      <CardContent className="p-4 space-y-3">
-        <h3 className="font-medium text-sm leading-tight line-clamp-2 min-h-[2.5rem]">
-          {product.nombre}
-        </h3>
+      <CardContent className="p-4 space-y-3 flex flex-col flex-1">
+        {/* Tooltip para mostrar el nombre completo al hacer hover */}
+        <div className="flex-1 min-h-0">
+          <h3 
+            className="font-medium text-sm leading-tight line-clamp-2 break-words"
+            title={product.nombre} // Tooltip nativo del navegador
+          >
+            {product.nombre}
+          </h3>
+        </div>
         
-        <Button className="w-full" size="sm">
+        <Button className="w-full mt-auto" size="sm">
           S/ {Number(product.precio).toFixed(2)}
         </Button>
       </CardContent>
