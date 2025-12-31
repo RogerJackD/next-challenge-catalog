@@ -16,7 +16,24 @@ export interface CreateProductDto {
     nombre: string;
     FamiliaProducto: number;
     precio: number;
-    image?: File; 
+    image?: File;
+    googleImageUrl?: string; // Nueva propiedad
+}
+
+
+export interface CreateProductResponse {
+    message: string;
+    producto: {
+        id: number;
+        codigoMercaderia: string;
+        nombre: string;
+        precio: number;
+        foto: string | null;
+        fotoUrl: string | null;
+        fotoThumbnail?: string | null;
+        fotoMedium?: string | null;
+        fotoOriginal?: string | null;
+    };
 }
 
 
