@@ -1,4 +1,8 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
+
+import { ImageSearchSelector } from './ImageSearchSelector';
+import { imagesService } from '../services/images-service';
+
 import { Plus, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -51,6 +55,12 @@ export const AddProductDialog = ({ families, onProductCreated }: AddProductDialo
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  //imagenes google estgados:
+  const [selectedGoogleImageUrl, setSelectedGoogleImageUrl] = useState<string | null>(null);
+  const [isDownloadingImage, setIsDownloadingImage] = useState(false);
+
+
+
   const filteredFamilies = useMemo(() => {
     if (!searchFamily) return families;
     return families.filter((family) =>
@@ -85,55 +95,88 @@ export const AddProductDialog = ({ families, onProductCreated }: AddProductDialo
     }
   };
 
-  // Limpiar imagen
-  const handleRemoveImage = () => {
-    setSelectedImage(null);
-    setImagePreview(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
 
   const handleSubmit = async () => {
-    // Validación
-    if (!productName || !selectedFamily || !price || !codeProduct) {
-      alert("Todos los campos son requeridos");
-      return;
-    }
+  if (!productName || !selectedFamily || !price || !codeProduct) {
+    alert("Todos los campos son requeridos");
+    return;
+  }
 
-    setIsSubmitting(true);
+  setIsSubmitting(true);
 
-    try {
-      const createProductData: CreateProductDto = {
-        codigoMercaderia: codeProduct,
-        nombre: productName,
-        FamiliaProducto: selectedFamily.idFamiliaProducto,
-        precio: parseFloat(price),
-        image: selectedImage || undefined, // Agregar la imagen si existe
-      };
+  try {
+    const createProductData: CreateProductDto = {
+      codigoMercaderia: codeProduct,
+      nombre: productName,
+      FamiliaProducto: selectedFamily.idFamiliaProducto,
+      precio: parseFloat(price),
+      image: selectedImage || undefined,
+      googleImageUrl: selectedGoogleImageUrl || undefined, // Incluir URL de Google
+    };
 
-      await productService.createProduct(createProductData);
-      console.log("Producto creado exitosamente");
+    await productService.createProduct(createProductData);
+    console.log("Producto creado exitosamente");
 
-      // Reset form
-      setProductName("");
-      setPrice("");
-      setSelectedFamily(null);
-      setSearchFamily("");
-      setCodeProduct("");
-      handleRemoveImage();
-      setOpen(false);
+    // Reset form...
+    setProductName("");
+    setPrice("");
+    setSelectedFamily(null);
+    setSearchFamily("");
+    setCodeProduct("");
+    handleRemoveImage();
+    setOpen(false);
 
-      // Llamar al callback para re-fetch
-      onProductCreated?.();
-      
-    } catch (error) {
-      console.error("Error al crear el producto:", error);
-      alert("Error al crear el producto. Por favor intenta de nuevo.");
-    } finally {
-      setIsSubmitting(false);
-    }
+    onProductCreated?.();
+    
+  } catch (error) {
+    console.error("Error al crear el producto:", error);
+    alert("Error al crear el producto. Por favor intenta de nuevo.");
+  } finally {
+    setIsSubmitting(false);
+  }
+};
+
+  const handleGoogleImageSelect = (imageUrl: string) => {
+  setSelectedGoogleImageUrl(imageUrl);
+  setImagePreview(imageUrl);
+  setSelectedImage(null); // Limpiar archivo local si había
+};
+
+const handleFileSelect = (file: File) => {
+  // Validar tipo
+  if (!file.type.startsWith('image/')) {
+    alert('Por favor selecciona un archivo de imagen válido');
+    return;
+  }
+
+  // Validar tamaño
+  if (file.size > 5 * 1024 * 1024) {
+    alert('La imagen es muy grande. Máximo 5MB');
+    return;
+  }
+
+  setSelectedImage(file);
+  setSelectedGoogleImageUrl(null); // Limpiar URL de Google si había
+  
+  // Crear preview
+  const reader = new FileReader();
+  reader.onloadend = () => {
+    setImagePreview(reader.result as string);
   };
+  reader.readAsDataURL(file);
+};
+
+// Actualizar handleRemoveImage:
+const handleRemoveImage = () => {
+  setSelectedImage(null);
+  setImagePreview(null);
+  setSelectedGoogleImageUrl(null);
+  if (fileInputRef.current) {
+    fileInputRef.current.value = '';
+  }
+};
+
+
 
   useEffect(() => {
     if (open) {
@@ -256,56 +299,43 @@ export const AddProductDialog = ({ families, onProductCreated }: AddProductDialo
           </div>
 
           {/* Sección de imagen */}
-          <div className="grid gap-2">
-            <Label>Imagen del Producto (Opcional)</Label>
-            
-            {imagePreview ? (
-              <div className="relative">
-                <div className="relative w-full h-48 rounded-lg overflow-hidden bg-gray-100">
-                  <img
-                    src={imagePreview}
-                    alt="Preview"
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <Button
-                  type="button"
-                  variant="destructive"
-                  size="icon"
-                  className="absolute top-2 right-2"
-                  onClick={handleRemoveImage}
-                  disabled={isSubmitting}
-                >
-                  <X className="w-4 h-4" />
-                </Button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <Input
-                  ref={fileInputRef}
-                  id="image"
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleImageChange}
-                  disabled={isSubmitting}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isSubmitting}
-                >
-                  <Upload className="w-4 h-4 mr-2" />
-                  Seleccionar Imagen
-                </Button>
-              </div>
-            )}
-            <p className="text-xs text-muted-foreground">
-              Formatos: JPG, PNG, WebP, GIF (Máx. 5MB)
-            </p>
-          </div>
+          
+{/* Sección de imagen */}
+<div className="grid gap-2">
+  <Label>Imagen del Producto (Opcional)</Label>
+  
+  {imagePreview ? (
+    <div className="relative">
+      <div className="relative w-full h-48 rounded-lg overflow-hidden bg-gray-100">
+        <img
+          src={imagePreview}
+          alt="Preview"
+          className="w-full h-full object-cover"
+        />
+      </div>
+      <Button
+        type="button"
+        variant="destructive"
+        size="icon"
+        className="absolute top-2 right-2"
+        onClick={handleRemoveImage}
+        disabled={isSubmitting}
+      >
+        <X className="w-4 h-4" />
+      </Button>
+      <p className="text-xs text-muted-foreground mt-2">
+        {selectedGoogleImageUrl ? 'Imagen de Google seleccionada' : 'Archivo local seleccionado'}
+      </p>
+    </div>
+  ) : (
+    <ImageSearchSelector
+      onImageSelect={handleGoogleImageSelect}
+      onFileSelect={handleFileSelect}
+      defaultSearchTerm={productName}
+      disabled={isSubmitting}
+    />
+  )}
+</div>
         </div>
         <DialogFooter>
           <Button
