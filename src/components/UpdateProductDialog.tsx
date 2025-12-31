@@ -27,7 +27,9 @@ import { Check, Upload, X, Trash2 } from 'lucide-react';
 import { Product, UpdateProductDto } from '../types/product';
 import { FamilyProduct } from '../types/familyProducts';
 import { productService } from '../services/product-service';
-
+//import google services iamge
+import { ImageSearchSelector } from './ImageSearchSelector';
+import { imagesService } from '../services/images-service';
 interface UpdateProductDialogProps {
   product: Product;
   families: FamilyProduct[];
@@ -58,12 +60,48 @@ export const UpdateProductDialog = ({
   const [keepCurrentImage, setKeepCurrentImage] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [selectedGoogleImageUrl, setSelectedGoogleImageUrl] = useState<string | null>(null);
+  const [isDownloadingImage, setIsDownloadingImage] = useState(false);
+  const [showImageSelector, setShowImageSelector] = useState(false);
+
   const filteredFamilies = useMemo(() => {
     if (!searchFamily) return families;
     return families.filter((family) =>
       family.nombreFamilia.toLowerCase().includes(searchFamily.toLowerCase())
     );
   }, [families, searchFamily]);
+
+
+  const handleGoogleImageSelect = (imageUrl: string) => {
+  setSelectedGoogleImageUrl(imageUrl);
+  setImagePreview(imageUrl);
+  setSelectedImage(null);
+  setKeepCurrentImage(false);
+};
+
+const handleFileSelect = (file: File) => {
+  if (!file.type.startsWith('image/')) {
+    alert('Por favor selecciona un archivo de imagen válido');
+    return;
+  }
+
+  if (file.size > 5 * 1024 * 1024) {
+    alert('La imagen es muy grande. Máximo 5MB');
+    return;
+  }
+
+  setSelectedImage(file);
+  setSelectedGoogleImageUrl(null);
+  setKeepCurrentImage(false);
+  
+  const reader = new FileReader();
+  reader.onloadend = () => {
+    setImagePreview(reader.result as string);
+  };
+  reader.readAsDataURL(file);
+};
+
+
 
   // URL de la imagen actual del producto
   const currentImageUrl = product.fotoMedium 
@@ -109,60 +147,77 @@ export const UpdateProductDialog = ({
   };
 
   const handleSubmit = async () => {
-    setIsSubmitting(true);
+  setIsSubmitting(true);
 
-    try {
-      const updateData: UpdateProductDto = {};
+  try {
+    const updateData: UpdateProductDto = {};
 
-      // Solo incluir campos que hayan cambiado
-      if (productName !== product.nombre) {
-        updateData.nombre = productName;
-      }
-      if (selectedFamily && selectedFamily.nombreFamilia !== product.familiaProducto) {
-        updateData.FamiliaProducto = selectedFamily.idFamiliaProducto;
-      }
-      if (parseFloat(price) !== product.precio) {
-        updateData.precio = parseFloat(price);
-      }
-
-      // Si hay una nueva imagen seleccionada, agregarla
-      if (selectedImage) {
-        updateData.image = selectedImage;
-      }
-
-      console.log('Actualizando producto:', updateData);
-      
-      await productService.updateProduct(product.idProducto, updateData);
-      
-      onUpdate(); // Trigger refetch
-      onOpenChange(false);
-    } catch (error) {
-      console.error('Error al actualizar el producto:', error);
-      alert('Error al actualizar el producto. Por favor intenta de nuevo.');
-    } finally {
-      setIsSubmitting(false);
+    // Solo incluir campos que hayan cambiado
+    if (productName !== product.nombre) {
+      updateData.nombre = productName;
     }
-  };
+    if (selectedFamily && selectedFamily.nombreFamilia !== product.familiaProducto) {
+      updateData.FamiliaProducto = selectedFamily.idFamiliaProducto;
+    }
+    if (parseFloat(price) !== product.precio) {
+      updateData.precio = parseFloat(price);
+    }
+
+    // Si hay una imagen de Google seleccionada, descargarla primero
+    if (selectedGoogleImageUrl) {
+      setIsDownloadingImage(true);
+      try {
+        await imagesService.downloadImage(selectedGoogleImageUrl, product.idProducto);
+        // La imagen ya se guardó en el backend, no necesitamos enviar nada más
+      } catch (error) {
+        console.error('Error al descargar imagen de Google:', error);
+        alert('Error al descargar la imagen de Google');
+        setIsDownloadingImage(false);
+        setIsSubmitting(false);
+        return;
+      }
+      setIsDownloadingImage(false);
+    } else if (selectedImage) {
+      // Si hay una imagen local seleccionada, agregarla
+      updateData.image = selectedImage;
+    }
+
+    console.log('Actualizando producto:', updateData);
+    
+    await productService.updateProduct(product.idProducto, updateData);
+    
+    onUpdate();
+    onOpenChange(false);
+  } catch (error) {
+    console.error('Error al actualizar el producto:', error);
+    alert('Error al actualizar el producto. Por favor intenta de nuevo.');
+  } finally {
+    setIsSubmitting(false);
+    setIsDownloadingImage(false);
+  }
+};
 
   useEffect(() => {
-    if (open) {
-      setProductName(product.nombre);
-      setPrice(product.precio.toString());
-      setSelectedFamily(
-        families.find(f => f.nombreFamilia === product.familiaProducto) || null
-      );
-      setSearchFamily('');
-      setFamilyOpen(false);
-      
-      // Reset imagen
-      setSelectedImage(null);
-      setImagePreview(null);
-      setKeepCurrentImage(true);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+  if (open) {
+    setProductName(product.nombre);
+    setPrice(product.precio.toString());
+    setSelectedFamily(
+      families.find(f => f.nombreFamilia === product.familiaProducto) || null
+    );
+    setSearchFamily('');
+    setFamilyOpen(false);
+    
+    // Reset imagen
+    setSelectedImage(null);
+    setImagePreview(null);
+    setSelectedGoogleImageUrl(null);
+    setKeepCurrentImage(true);
+    setShowImageSelector(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
-  }, [open, product, families]);
+  }
+}, [open, product, families]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -175,96 +230,106 @@ export const UpdateProductDialog = ({
         </DialogHeader>
         <div className="grid gap-4 py-4">
           {/* Sección de Imagen */}
-          <div className="grid gap-2">
-            <Label>Imagen del Producto</Label>
-            
-            {/* Mostrar imagen actual o nueva */}
-            {imagePreview ? (
-              // Preview de nueva imagen
-              <div className="relative">
-                <div className="relative w-full h-48 rounded-lg overflow-hidden bg-gray-100">
-                  <img
-                    src={imagePreview}
-                    alt="Nueva imagen"
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <Button
-                  type="button"
-                  variant="destructive"
-                  size="icon"
-                  className="absolute top-2 right-2"
-                  onClick={handleRemoveNewImage}
-                  disabled={isSubmitting}
-                >
-                  <X className="w-4 h-4" />
-                </Button>
-                <p className="text-xs text-muted-foreground mt-2">
-                  Nueva imagen seleccionada
-                </p>
-              </div>
-            ) : currentImageUrl && keepCurrentImage ? (
-              // Imagen actual
-              <div className="relative">
-                <div className="relative w-full h-48 rounded-lg overflow-hidden bg-gray-100">
-                  <img
-                    src={currentImageUrl}
-                    alt={product.nombre}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground mt-2">
-                  Imagen actual
-                </p>
-              </div>
-            ) : (
-              // Sin imagen
-              <div className="w-full h-48 rounded-lg bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
-                <div className="text-center">
-                  <svg 
-                    className="w-12 h-12 text-gray-400 mx-auto mb-2" 
-                    fill="none" 
-                    stroke="currentColor" 
-                    viewBox="0 0 24 24"
-                  >
-                    <path 
-                      strokeLinecap="round" 
-                      strokeLinejoin="round" 
-                      strokeWidth={1.5} 
-                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" 
-                    />
-                  </svg>
-                  <p className="text-sm text-gray-500">Sin imagen</p>
-                </div>
-              </div>
-            )}
-
-            {/* Botón para cambiar imagen */}
-            <div className="flex gap-2">
-              <Input
-                ref={fileInputRef}
-                id="update-image"
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleImageChange}
-                disabled={isSubmitting}
+          {/* Sección de Imagen */}
+<div className="grid gap-2">
+  <Label>Imagen del Producto</Label>
+  
+  {/* Mostrar imagen actual o nueva */}
+  {imagePreview ? (
+    // Preview de nueva imagen
+    <div className="relative">
+      <div className="relative w-full h-48 rounded-lg overflow-hidden bg-gray-100">
+        <img
+          src={imagePreview}
+          alt="Nueva imagen"
+          className="w-full h-full object-cover"
+        />
+      </div>
+      <Button
+        type="button"
+        variant="destructive"
+        size="icon"
+        className="absolute top-2 right-2"
+        onClick={handleRemoveNewImage}
+        disabled={isSubmitting || isDownloadingImage}
+      >
+        <X className="w-4 h-4" />
+      </Button>
+      <p className="text-xs text-muted-foreground mt-2">
+        {selectedGoogleImageUrl ? 'Imagen de Google seleccionada' : 'Nueva imagen seleccionada'}
+      </p>
+    </div>
+  ) : currentImageUrl && keepCurrentImage && !showImageSelector ? (
+    // Imagen actual
+    <div className="space-y-2">
+      <div className="relative w-full h-48 rounded-lg overflow-hidden bg-gray-100">
+        <img
+          src={currentImageUrl}
+          alt={product.nombre}
+          className="w-full h-full object-cover"
+        />
+      </div>
+      <p className="text-xs text-muted-foreground">Imagen actual</p>
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full"
+        onClick={() => setShowImageSelector(true)}
+        disabled={isSubmitting}
+      >
+        <Upload className="w-4 h-4 mr-2" />
+        Cambiar Imagen
+      </Button>
+    </div>
+  ) : (
+    // Selector de imagen (sin imagen o quiere cambiar)
+    <div className="space-y-2">
+      {!currentImageUrl && (
+        <div className="w-full h-48 rounded-lg bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center mb-2">
+          <div className="text-center">
+            <svg 
+              className="w-12 h-12 text-gray-400 mx-auto mb-2" 
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24"
+            >
+              <path 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                strokeWidth={1.5} 
+                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" 
               />
-              <Button
-                type="button"
-                variant="outline"
-                className="flex-1"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isSubmitting}
-              >
-                <Upload className="w-4 h-4 mr-2" />
-                {currentImageUrl ? 'Cambiar Imagen' : 'Agregar Imagen'}
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Formatos: JPG, PNG, WebP, GIF (Máx. 5MB)
-            </p>
+            </svg>
+            <p className="text-sm text-gray-500">Sin imagen</p>
           </div>
+        </div>
+      )}
+      
+      <ImageSearchSelector
+        onImageSelect={handleGoogleImageSelect}
+        onFileSelect={handleFileSelect}
+        defaultSearchTerm={productName}
+        disabled={isSubmitting || isDownloadingImage}
+      />
+      
+      {currentImageUrl && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="w-full"
+          onClick={() => {
+            setShowImageSelector(false);
+            setKeepCurrentImage(true);
+          }}
+          disabled={isSubmitting}
+        >
+          Mantener imagen actual
+        </Button>
+      )}
+    </div>
+  )}
+</div>
 
           {/* Campos de texto */}
           <div className="grid gap-2">
@@ -352,12 +417,16 @@ export const UpdateProductDialog = ({
             Cancelar
           </Button>
           <Button
-            type="button"
-            onClick={handleSubmit}
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? "Actualizando..." : "Actualizar Producto"}
-          </Button>
+  type="button"
+  onClick={handleSubmit}
+  disabled={isSubmitting || isDownloadingImage}
+>
+  {isDownloadingImage 
+    ? "Descargando imagen..." 
+    : isSubmitting 
+    ? "Actualizando..." 
+    : "Actualizar Producto"}
+</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
