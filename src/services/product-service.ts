@@ -1,5 +1,5 @@
 import { CodeProduct } from "../types/codeProduct";
-import { CreateProductDto, PaginatedResponse, Product, UpdateProductDto } from "../types/product";
+import { CreateProductDto, CreateProductResponse, PaginatedResponse, Product, UpdateProductDto } from "../types/product";
 
 export const productService = {
   getProducts: async (
@@ -19,40 +19,37 @@ export const productService = {
     return response.json();
   },
 
-  createProduct: async (createProducto: CreateProductDto): Promise<any> => {
-    // Crear FormData para enviar datos + archivo
+ createProduct: async (createProducto: CreateProductDto): Promise<CreateProductResponse> => {
+    // SIEMPRE usar FormData (tanto para archivo como para Google URL)
     const formData = new FormData();
-
-    formData.append("codigoMercaderia", createProducto.codigoMercaderia);
-    formData.append("nombre", createProducto.nombre);
-    formData.append(
-      "FamiliaProducto",
-      createProducto.FamiliaProducto.toString()
-    );
-    formData.append("precio", createProducto.precio.toString());
-
-    // Si hay una imagen, agregarla
+    
+    formData.append('codigoMercaderia', createProducto.codigoMercaderia);
+    formData.append('nombre', createProducto.nombre);
+    formData.append('FamiliaProducto', createProducto.FamiliaProducto.toString());
+    formData.append('precio', createProducto.precio.toString());
+    
+    // Si hay URL de Google, agregarla como string en FormData
+    if (createProducto.googleImageUrl) {
+        formData.append('googleImageUrl', createProducto.googleImageUrl);
+    }
+    
+    // Si hay archivo local, agregarlo
     if (createProducto.image) {
-      formData.append("image", createProducto.image);
+        formData.append('image', createProducto.image);
     }
 
-    const response = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/catalog/product`,
-      {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/catalog/product`, {
         method: "POST",
-        // NO incluir Content-Type header, el navegador lo configurará automáticamente con boundary
-        body: formData,
-      }
-    );
+        body: formData  // Sin headers, el navegador los configura automáticamente
+    });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `Error HTTP: ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Error HTTP: ${response.status}`);
     }
 
     return response.json();
-  },
-
+},
   updateProduct: async (
     idProduct: number,
     updateProductDto: UpdateProductDto
